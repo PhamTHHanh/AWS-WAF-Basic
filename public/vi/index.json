@@ -1,0 +1,64 @@
+[
+{
+	"uri": "/vi/",
+	"title": "CƠ BẢN VỀ WEB APPLICATION FIREWALL VỚI EC2",
+	"tags": [],
+	"description": "",
+	"content": "CƠ BẢN VỀ WEB APPLICATION FIREWALL VỚI EC2 Tổng quan Ở bài lab này hứng dẫn với Web application firewall cơ bản để bảo vệ EC2 instance workload bởi các cuộc tấn công thông qua mạng. Chúng ta sẽ sử dụng AWS Management Console và AWS CloudFormation để hướng dẫn cách bảo vệ một ứng dụng web chạy trên EC2. Web Application Firewall AWS WAF là một tưởng lửa cho ứng dụng web cho phép người dùng giám sát các yêu cầu HTTP/HTTPS được chuyển tiếp đến CloudFront, Amazon API Gateway REST API, Application Load Balancer, hoặc AWS AppSync GraphQL API. AWS WAF cũng cho phếp đồng kiểm soát quyền truy cập vào nội dung của bạn. Dựa trên các điều kiện mà bạn chỉ định, như giá trị của chuỗi truy vấn hoặc địa chỉ IP của các yêu cầu. Các dịch vụ được liên kết với WAF phản hồi các yêu cầu hoặc với mã trạng thái 403 (Forbidden).\n Web ACLs: Sử dụng web access control list để bảo vệ những AWS resources. Bạn tạo web ACL và định nghĩa chiến lược bảo vệ tài nguyên bằng cách thêm các Rule. Rules: Mỗi Rule định nghĩa tiêu chí kiểm tra và hành động cần thực hiện nếu một yêu cầu web đáp ứng tiêu chí. Có thể cấu hình các quy tắc để chặn các yêu cầu phù hợp, cho phép chúng thông qua, đếm chúng hoặc chạy các điều khiển CAPTCHA đối với chúng. Rules groups: Bạn có thể sử dụng các rule riêng lẻ hoặc sử dụng lại các nhóm rule. CAWS Managed Rules và AWS Marketplace sellers cung cấp các rule được quản lý để bạn sử dụng. Cũng có thể xác định các nhóm quy tắc riêng cho mình.  Nội dung  Tạo EC2 instance Tạo AWS WAF Rules với CloudFormation Tạo ALB tích hợp với WAF Dọn dẹp tài nguyên  "
+},
+{
+	"uri": "/vi/1-create-ec2/",
+	"title": "Khởi tạo EC2 instance",
+	"tags": [],
+	"description": "",
+	"content": "Chúng ta sẽ khởi tạo EC2 Linux instance bằng Amazon EC2 console trên Singapore(ap-southeast-1).\nKhởi chạy EC2 instance  Đăng nhập vào trang quản trị AWS Management Console và tìm kiếm dịch vụ EC2.  Để khởi tạo máy ảo chọn Launch instance.  Ở trang Choose an Amazon Machine Image (AMI) sẽ thể hiện một danh sách các Amazon Machine Images (AMIs). Lựa chọn AMI với tên Amazon Linux 2 AMI (HVM).   Click Select   Tiếp theo, ở trang Choose an Instance Type, chúng ta sẽ lựa chọn cấu hình tài nguyên máy ảo. Lựa chọn loại t2.micro. Sau đó nhấn nút Next: Configure Instance Details.  Tại trang Configure Instance Detail. Để giá trị mặc định. EC2 Instance của chúng ta sẽ được tạo trong VPC Default.   Chọn subnet cho instance, ví dụ ap-southeast-1a  Tại mục IAM role, chọn Create new IAM role  Trong tab mới, chọn Create role  Chọn EC2 là dịch vụ sẽ sử dụng role này, sau đó kéo xuống và click nút Next: Permissions  Nhập S3 vào thanh tìm kiếm, sau đó chọn AmazonS3ReadOnlyAccess từ danh sách policies, sau đó click Next: Review. Policy này cho phép instance truy cập vào S3 để đọc và liệt kê bất cứ object nào trong tài khoản AWS của người dùng.  Nhập tên cho Role, ví dụ ec2-s3-read-only-role, sau đó click Create role  Trở lại tab đang tạo EC2, chọn button refresh ngay cạnh Create new IAM role, sau đó chọn role vừa tạo( ví dụ: ec2-s3-read-only-role )  Sao chép đoạn mã sau vào User Data. Đoạn mã này cho phép tự động cài đặt Apache web server và cấu hình cơ bản khi instance chạy lần đầu tiên. Sau đó ấn nut Next: Add Storage  #!/bin/bash yum update -y yum install -y httpd service httpd start chkconfig httpd on groupadd www usermod -a -G www ec2-user chown -R root:www /var/www chmod 2775 /var/www find /var/www -type d -exec chmod 2775 {} + find /var/www -type f -exec chmod 0664 {} + 6. Ấn nút Next: Add Tags 7. Ấn nút Next: Add Configure Security Group\n Thêm các rule theo mục dưới. Chọn Add rule để thêm 1 rule.  Type: SSH | Source: My IP Type: HTTP | Source: Anywhere    Sau đó ấn nút Review and Launch  Xem lại các thông tin và ấn nút Launch  Tạo một key-pair mới, đặt tên ví dụ **WAF-Lab**, sau đó ấn nút Download Key Pair để tải key pair về. Cuối cùng ấn nút Launch Instances. Nếu bạn đã có key pair sẵn rồi thì có thể chọn Choose an existing key pair, sau đó chọn key pair mà mình muốn và tích vào ô I acknowledge that I have access to the corresponding private key file, and that without this file, I won\u0026rsquo;t be able to log into my instance.\n\r Chọn View Instance  Chờ một vài phút để instance chuyển sang trạng thái Running  Ấn vào instance, copy DNS và mở nó trong browser để kiểm tra Application test page   "
+},
+{
+	"uri": "/vi/2-create-waf-rules-with-cloudformation/",
+	"title": "Khởi tạo AWS WAF Rules",
+	"tags": [],
+	"description": "",
+	"content": "Chúng ta sẽ khởi tạo một AWS WAF cơ bản dùng cho Application Load Balancer bằng AWS CloudFormation.\nKhởi tạo AWS WAF bằng AWS CloudFormation  Đăng nhập vào trang quản trị AWS Management Console và tìm kiếm dịch vụ CloudFormation.  Nhấn Create Stack  Nhập https://s3-us-west-2.amazonaws.com/aws-well-architected-labs/Security/Code/waf-regional.yaml vào ô Amazon S3 URL, sau đó nhấn Next  Nhập tên cho stack, ví dụ: lab-waf-regional  Nhấn nút Next  Xem lại thông tin của stack và ấn nút Create Stack  Đợi stack chuyển status từ CREATE_IN_PROGRESS sang CREATE_COMPLETE. Vậy là bạn đã hoàn thành tạo WAF cơ bản bằng CloudFormation.  "
+},
+{
+	"uri": "/vi/3-create-abl-waf-intergation/",
+	"title": "Tạo ALB tích hợp với WAF",
+	"tags": [],
+	"description": "",
+	"content": "Trong phần này chúng ta sẽ khởi tạo 1 Application Load Balancer sau đó liên kết với AWS WAF đã tạo trước đó bằng AWS Management Console\nNội dung  Khởi tạo Application Load Balancer Configure ALB với WAF  "
+},
+{
+	"uri": "/vi/3-create-abl-waf-intergation/3.2-intergation-alb-waf/",
+	"title": "Configure ALB với WAF",
+	"tags": [],
+	"description": "",
+	"content": "Sau khi tạo Application load balancer, chúng ta kết nối nó với WAF đã được tạo trong phần 2.\n Đăng nhập vào trang quản trị AWS Management Console và tìm WAF trên thanh tìm kiếm  Nhấn nút Go to AWS WAF  Nhấn vào Switch to AWS WAF Classic  Chọn Region tương ứng với Region mà bạn chạy CloudFormation, sau đó hiện thị danh sách Web ACLs. Chọn web ACL đã tạo (WAFLabReg-WebACL1)  Nhấn tab Rule  Kéo xuống dưới và nhấn nút Add association tại mục AWS resources using this web ACL  Chọn Application Load Balancer cho Resource type, sau đó chọn load balancer tạo ở bước 3.1 cho mục Resource. Kết thúc bằng việc nhấn nút Add  Application load balancer xuất hiện trong bảng AWS resources using this web ACL  Giờ bạn có thể kiểm tra quyền truy cập bằng cách nhập DNS của load balancer vào trình quyệt web.   "
+},
+{
+	"uri": "/vi/3-create-abl-waf-intergation/3.1-create-alb/",
+	"title": "Tạo Application Load Balancer",
+	"tags": [],
+	"description": "",
+	"content": "Chúng ta sẽ tạo một Application Load Balancer với target group gồm EC2 instance tạo ở bước 1.\n Mở Amazon EC2 console tại: https://console.aws.amazon.com/ec2/, sau đó bấm vào Load Balancers ở menu bên trái.  Nhấn nút Create của phần Application Load Balancer  Nhập tên cho load balancer, ví dụ lab-alb.  Tiếp theo chọn tất cả AZ của Region của bạn.  Xoá default security và nhấn vào Create a new security để tạo SG cho ALB  Nhập name cho SG, ví dụ lab-alb. Sau đó thêm rule có Port: 80 và Source: Anywhere IPv4  Nhấn Create để tạo SG. Sau đó trở lại màn hình đang tạo ALB Nhấn nút refresh và chọn SG mà chúng ta vừa tạo.  Kéo xuống dưới phần Listeners and routing, nhấn Create target group để tạo target group mới  Nhập tên cho target group, ví dụ WAF-TG.  Ấn Next. Từ danh sách instance, nhấn vào check box của instance mà chúng ta đã tạo, sau đó ấn nút Include as pending below.  Ấn nút Create target group.    Vậy là chúng ta đã tạo xong một target group   Trở lại màn hình đang tạo ALB, nhấn nút refresh và chọn target group mà chúng ta vừa tạo.  Các thông số khác để mặc định, kéo xuống và nhấn nút Create load balancer    Nhấn View load balancer   Vậy chúng ta đã tạo xong một load banlancer, copy DNS của nó ra broswer để chạy thử.   "
+},
+{
+	"uri": "/vi/4-clean/",
+	"title": "Dọn dẹp tài nguyên",
+	"tags": [],
+	"description": "",
+	"content": "Chúng ta sẽ dọn dẹp tài nguyên theo thứ tự như sau:\n Xoá Load balancer   Truy cập EC2 Management Console Trên thanh điều hướng bên trái, chọn Load Balancers Chọn Load Balancer liên quan tới bài lab. Click Actions. Click Delete.  Xoá target group   Truy cập EC2 Management Console Trên thanh điều hướng bên trái, chọn Target Groups Chọn Target Group liên quan tới bài lab. Click Actions. Click Delete. Click Yes, delete  Terminate EC2 instance   Truy cập EC2 Management Console Trên thanh điều hướng bên trái, chọn Intances Chọn tất cả EC2 Instance liên quan tới bài lab. Click Actions. Click Manage Instance State. Chọn Terminate. Click Change State  Xoá AWS WAF stack   Truy cập CloudFormation Console Chọn lab-waf-regional stack Click nút Action, và sau đó click Delete Stack Xác nhận stack, ấn nút Yes, Delete  "
+},
+{
+	"uri": "/vi/categories/",
+	"title": "Categories",
+	"tags": [],
+	"description": "",
+	"content": ""
+},
+{
+	"uri": "/vi/tags/",
+	"title": "Tags",
+	"tags": [],
+	"description": "",
+	"content": ""
+}]
